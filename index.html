@@ -3,10 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beitbridge</title>
+<meta name="description" content="An interactive narrative about a border trader navigating Beitbridge, paperwork friction, and trade knowledge gaps.">
+<meta name="theme-color" content="#0f0d0b">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Josefin+Sans:wght@200;300;400&display=swap">
+<title>Beitbridge | A Border Trader's Story</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Josefin+Sans:wght@200;300;400&display=swap');
-
 :root {
   --bg:       #0f0d0b;
   --border:   rgba(180,150,100,0.18);
@@ -17,6 +21,7 @@
   --danger:   #b03a2e;
   --danger-dim: rgba(176,58,46,0.18);
   --safe:     #4a7c59;
+  --focus:    #f2cc7a;
   --ease:     cubic-bezier(0.22,1,0.36,1);
   --ease-out: cubic-bezier(0.16,1,0.3,1);
 }
@@ -30,6 +35,58 @@ body {
   font-family: 'Cormorant Garamond', Georgia, serif;
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+.skip-link,
+.sr-only {
+  position: absolute;
+}
+
+.skip-link {
+  left: 16px;
+  top: 16px;
+  z-index: 10001;
+  padding: 10px 14px;
+  background: var(--paper);
+  color: var(--bg);
+  font-family:'Josefin Sans', sans-serif;
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 0.18s ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+.sr-only {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.noscript-banner {
+  position: relative;
+  z-index: 10000;
+  padding: 12px 16px;
+  background: rgba(176,58,46,0.92);
+  color: #fff;
+  font-family:'Josefin Sans', sans-serif;
+  font-size: 12px;
+  letter-spacing: 0.8px;
+  text-align: center;
 }
 
 /* ── FLASH OVERLAY — bad outcome hit ── */
@@ -401,6 +458,7 @@ body::after {
 .tag-locked { color:var(--muted);  border-color:rgba(122,106,86,0.3); opacity:0.45; }
 
 .choice.locked { opacity:0.28; pointer-events:none; }
+.choice:disabled { cursor:not-allowed; }
 
 /* ── PROGRESS ── */
 .progress {
@@ -429,6 +487,7 @@ body::after {
   font-weight:300; line-height:1; letter-spacing:-2px;
   color:var(--paper); margin-bottom:4px;
 }
+.title-subline { margin-bottom:32px; }
 .intro-text {
   font-size:18px; font-weight:300;
   line-height:1.82; color:rgba(237,224,203,0.6);
@@ -510,22 +569,37 @@ body::after {
   .stat-cell:last-child { border-bottom:none; }
   .status-cell { min-width:50%; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior:auto; }
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
 </style>
 </head>
 <body>
 
-<div id="flash"></div>
-<div id="bg-a"></div>
-<div id="bg-b"></div>
-<div id="vignette"></div>
-<div class="ambient"></div>
+<a class="skip-link" href="#main-content">Skip to story content</a>
+<noscript>
+  <div class="noscript-banner">This interactive story requires JavaScript for navigation and state tracking.</div>
+</noscript>
+<div id="story-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
+<div id="flash" aria-hidden="true"></div>
+<div id="bg-a" aria-hidden="true"></div>
+<div id="bg-b" aria-hidden="true"></div>
+<div id="vignette" aria-hidden="true"></div>
+<div class="ambient" aria-hidden="true"></div>
+
+<main id="main-content" tabindex="-1">
 <div id="stage">
-  <div class="page visible enter" id="page-title">
+  <div class="page visible enter" id="page-title" role="region" aria-labelledby="title-heading">
     <div class="card stagger">
       <div class="eyebrow">An Interactive Simulation</div>
-      <h1 class="title-headline">Beitbridge</h1>
-      <div class="subline" style="margin-bottom:32px">A Border Trader's Story</div>
+      <h1 class="title-headline" id="title-heading" data-page-heading tabindex="-1">Beitbridge</h1>
+      <div class="subline title-subline">A Border Trader's Story</div>
       <div class="rule"></div>
       <p class="intro-text">
         You are <em>Amara.</em><br>
@@ -534,14 +608,18 @@ body::after {
         You have never heard of the <strong>AfCFTA.</strong><br>
         You believe what you carry is enough.
       </p>
-      <button class="cta" onclick="goTo('dawn')">Begin the Journey</button>
+      <button class="cta" id="start-button" type="button" data-action="go" data-target="dawn">Begin the Journey</button>
     </div>
   </div>
 </div>
+</main>
 
 <script>
 /* ─── STATE ─── */
 const S = { money:480, hours:0, lost:0 };
+const stage = document.getElementById('stage');
+const storyLive = document.getElementById('story-live');
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 /* ─── IMAGES ─── */
 const IMAGES = {
@@ -894,7 +972,29 @@ const ENDS = {
 let currentId = 'page-title';
 let prevHours = 0;
 
+function transitionMs(duration) {
+  return reducedMotion.matches ? 0 : duration;
+}
+
+function announceCurrentView(page) {
+  const heading = page.querySelector('[data-page-heading]');
+  if (!heading || !storyLive) return;
+  const eyebrow = page.querySelector('.eyebrow');
+  const subline = page.querySelector('.subline');
+  const parts = [heading.textContent, eyebrow?.textContent, subline?.textContent].filter(Boolean);
+  storyLive.textContent = '';
+  requestAnimationFrame(() => {
+    storyLive.textContent = parts.join('. ');
+  });
+}
+
+function focusCurrentHeading(page) {
+  const heading = page.querySelector('[data-page-heading]');
+  if (heading) heading.focus({ preventScroll: true });
+}
+
 function goTo(sceneId, isBad) {
+  if (!SCENES[sceneId] && !ENDS[sceneId]) return;
   setBackground(sceneId);
   if (isBad) triggerFlash();
   updateVignette();
@@ -903,15 +1003,15 @@ function goTo(sceneId, isBad) {
   if (cur) {
     cur.classList.add('exit');
     cur.classList.remove('enter');
-    setTimeout(() => cur.classList.remove('visible','exit'), 300);
+    setTimeout(() => cur.classList.remove('visible','exit'), transitionMs(300));
   }
   setTimeout(() => {
     ENDS[sceneId] ? renderEnd(sceneId) : renderScene(sceneId);
-  }, 170);
+  }, transitionMs(170));
 }
 
 function choose(to, cost, isBad) {
-  const prevMoney = S.money;
+  if (cost > S.money) return;
   if (cost) { S.money = Math.max(0, S.money - cost); S.lost += cost; }
   prevHours = S.hours;
   S.hours += 3;
@@ -931,7 +1031,8 @@ function renderScene(id) {
   h += `<div class="card-narrative stagger">`;
 
   /* progress */
-  h += `<div class="progress">`;
+  h += `<div class="sr-only">Checkpoint ${Math.min(sc.dot + 1, 6)} of 6.</div>`;
+  h += `<div class="progress" aria-hidden="true">`;
   for (let i=0;i<6;i++) {
     const c = i < sc.dot ? 'done' : i === sc.dot ? 'active' : '';
     h += `<div class="dot ${c}"></div>`;
@@ -940,7 +1041,7 @@ function renderScene(id) {
 
   /* header */
   h += `<div class="eyebrow">${sc.eyebrow}</div>`;
-  h += `<h2 class="headline">${sc.headline}</h2>`;
+  h += `<h1 class="headline" id="scene-heading-${id}" data-page-heading tabindex="-1">${sc.headline}</h1>`;
   h += `<div class="subline">${sc.subline}</div>`;
   h += `<div class="rule"></div>`;
 
@@ -990,8 +1091,12 @@ function renderScene(id) {
       let tags = '';
       if (ch.tag) tags += `<span class="tag tag-${ch.tagType||'cost'}">${ch.tag}</span>`;
       if (locked) tags += `<span class="tag tag-locked">cannot afford</span>`;
-      h += `<button class="${choiceCls}"
-        onclick="choose('${ch.to}',${ch.cost||0},${isBadChoice})">
+      h += `<button class="${choiceCls}" type="button"
+        data-action="choose"
+        data-target="${ch.to}"
+        data-cost="${ch.cost||0}"
+        data-bad="${isBadChoice}"
+        ${locked ? 'disabled aria-disabled="true"' : ''}>
         <span class="choice-letter">${ch.id}</span>
         <span class="choice-body">${ch.text}${tags?`<div class="choice-tags">${tags}</div>`:''}</span>
       </button>`;
@@ -1005,6 +1110,11 @@ function renderScene(id) {
 
   /* animate clock ticking up after mount */
   requestAnimationFrame(() => {
+    const page = document.getElementById('scene-' + id);
+    if (page) {
+      focusCurrentHeading(page);
+      announceCurrentView(page);
+    }
     const clockEl = document.getElementById('clock-val');
     if (clockEl && prevHours !== S.hours) tickClock(clockEl, prevHours, S.hours);
 
@@ -1029,7 +1139,7 @@ function renderEnd(id) {
   /* ── narrative column ── */
   h += `<div class="card-narrative stagger">`;
   h += `<div class="eyebrow">Journey's End</div>`;
-  h += `<h2 class="end-headline ${e.type}">${e.headline}</h2>`;
+  h += `<h1 class="end-headline ${e.type}" id="end-heading-${id}" data-page-heading tabindex="-1">${e.headline}</h1>`;
   h += `<div class="subline">${subline}</div>`;
   h += `<div class="rule"></div>`;
   h += `<p class="end-summary">${summary}</p>`;
@@ -1047,11 +1157,19 @@ function renderEnd(id) {
     <div class="insight-text">${e.insight}<br><br>
     The <strong>AfCFTA</strong> has been operational since 2021. Zimbabwe is a signatory. Across Africa's 635 urban border corridors, <strong>42 million people</strong> live and trade in the gap between capacity and capability.</div>
   </div>`;
-  h += `<button class="cta" onclick="restart()">Try a Different Path</button>`;
+  h += `<button class="cta" type="button" data-action="restart">Try a Different Path</button>`;
   h += `</div>`;
 
   h += `</div>`;
   mount('end-'+id, h);
+
+  requestAnimationFrame(() => {
+    const page = document.getElementById('end-' + id);
+    if (page) {
+      focusCurrentHeading(page);
+      announceCurrentView(page);
+    }
+  });
 }
 
 /* ─── DOM ─── */
@@ -1065,6 +1183,11 @@ function mount(pageId, html) {
     document.getElementById('stage').appendChild(page);
   }
   page.innerHTML = html;
+  const heading = page.querySelector('[data-page-heading]');
+  if (heading) {
+    page.setAttribute('role', 'region');
+    page.setAttribute('aria-labelledby', heading.id);
+  }
   page.classList.add('visible','enter');
   currentId = pageId;
   if (window.scrollY > 0) window.scrollTo(0, 0);
@@ -1075,18 +1198,41 @@ function restart() {
   updateVignette();
   setBackground('page-title');
   const cur = document.getElementById(currentId);
-  if (cur) { cur.classList.add('exit'); cur.classList.remove('enter'); setTimeout(()=>cur.classList.remove('visible','exit'),300); }
+  if (cur) { cur.classList.add('exit'); cur.classList.remove('enter'); setTimeout(()=>cur.classList.remove('visible','exit'),transitionMs(300)); }
   setTimeout(() => {
     document.querySelectorAll('.page').forEach(p => { if (p.id !== 'page-title') p.remove(); });
     const t = document.getElementById('page-title');
     t.classList.add('visible','enter');
     currentId = 'page-title';
     if (window.scrollY > 0) window.scrollTo(0, 0);
-  }, 360);
+    const startButton = document.getElementById('start-button');
+    if (startButton) startButton.focus({ preventScroll: true });
+    announceCurrentView(t);
+  }, transitionMs(360));
 }
+
+function handleStageAction(event) {
+  const button = event.target.closest('[data-action]');
+  if (!button || button.disabled) return;
+  const action = button.dataset.action;
+  if (action === 'go') {
+    goTo(button.dataset.target);
+    return;
+  }
+  if (action === 'choose') {
+    choose(button.dataset.target, Number(button.dataset.cost || 0), button.dataset.bad === 'true');
+    return;
+  }
+  if (action === 'restart') {
+    restart();
+  }
+}
+
+stage.addEventListener('click', handleStageAction);
 
 /* init */
 setBackground('page-title');
+announceCurrentView(document.getElementById('page-title'));
 </script>
 </body>
 </html>
