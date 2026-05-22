@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Beitbridge</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Josefin+Sans:wght@200;300;400&display=swap');
+
+:root {
+  --bg:       #0f0d0b;
+  --border:   rgba(180,150,100,0.18);
+  --gold:     #c8923a;
+  --gold-dim: rgba(200,146,58,0.38);
+  --paper:    #ede0cb;
+  --muted:    #7a6a56;
+  --danger:   #b03a2e;
+  --danger-dim: rgba(176,58,46,0.18);
+  --safe:     #4a7c59;
+  --ease:     cubic-bezier(0.22,1,0.36,1);
+  --ease-out: cubic-bezier(0.16,1,0.3,1);
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--paper);
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── FLASH OVERLAY — bad outcome hit ── */
+#flash {
+  position: fixed; inset: 0; z-index: 8000;
+  background: var(--danger);
+  opacity: 0; pointer-events: none;
+  will-change: opacity;
+}
+#flash.fire { animation: flashHit 0.6s ease-out forwards; }
+@keyframes flashHit {
+  0%   { opacity: 0.28; }
+  100% { opacity: 0; }
+}
+
+/* ── BACKGROUND SLOTS ── */
+#bg-a, #bg-b {
+  position: fixed; inset: 0; z-index: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: opacity 1.1s ease;
+  will-change: opacity;
+}
+#bg-a::after, #bg-b::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(15,13,11,0.75) 0%,
+    rgba(15,13,11,0.60) 45%,
+    rgba(15,13,11,0.82) 100%
+  );
+}
+#bg-a { opacity: 0; }
+#bg-b { opacity: 0; }
+
+/* grain */
+body::after {
+  content:''; position:fixed; inset:0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  pointer-events:none; z-index:9999; opacity:0.55;
+}
+
+/* ambient */
+.ambient {
+  position:fixed; inset:0; pointer-events:none; z-index:1;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 95%, rgba(200,146,58,0.05) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 30% at 15% 5%,  rgba(200,146,58,0.03) 0%, transparent 60%);
+}
+
+/* ── DANGER VIGNETTE — active when money < 150 ── */
+#vignette {
+  position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  box-shadow: inset 0 0 0 rgba(176,58,46,0);
+  transition: box-shadow 1.2s ease;
+}
+#vignette.danger {
+  animation: vigPulse 3.5s ease-in-out infinite;
+}
+@keyframes vigPulse {
+  0%, 100% { box-shadow: inset 0 0 80px rgba(176,58,46,0.0); }
+  50%       { box-shadow: inset 0 0 80px rgba(176,58,46,0.22); }
+}
+
+/* stage */
+#stage {
+  position:relative; z-index:3;
+  min-height:100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+  padding: 32px 24px;
+}
+
+.card { width:100%; max-width:520px; }
+
+/* Every page reserves a full viewport-height slot and centres its card inside it.
+   This keeps the card visually centred AND stops the vertical jump between
+   scenes of different heights — every scene starts in the same place. */
+.page { display:none; width:100%; }
+.page.visible {
+  display:flex; justify-content:center; align-items:center;
+  min-height: calc(100vh - 64px);
+}
+
+/* Exiting pages lift out of flow so the entering card slots in
+   without the layout shift that caused the jump */
+.page.exit {
+  position: absolute;
+  inset: 32px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* ── SPLIT CARD — narrative left, status/choices right (desktop) ── */
+.card-narrative, .card-action { display: contents; }
+
+@media (min-width: 920px) {
+  .card.card-split {
+    max-width: 940px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 48px;
+    align-items: start;
+  }
+  .card.card-split .card-narrative,
+  .card.card-split .card-action { display: block; }
+}
+
+/* Compress vertical rhythm inside split cards so the whole scene fits viewport */
+.card-split .progress      { margin-bottom: 14px; }
+.card-split .eyebrow       { margin-bottom: 10px; }
+.card-split .headline      { margin-bottom: 6px; }
+.card-split .subline       { margin-bottom: 16px; }
+.card-split .rule          { margin-bottom: 16px; }
+.card-split .body-text     { font-size: clamp(14px, 1.35vw, 17px); line-height: 1.65; margin-bottom: 14px; }
+.card-split .fact-strip    { padding: 11px 14px; font-size: 10.5px; line-height: 1.6; margin-bottom: 0; }
+.card-split .status-row    { margin-bottom: 14px; }
+.card-split .outcome-card  { padding: 14px 16px; margin-bottom: 12px; }
+.card-split .outcome-text  { font-size: 14px; line-height: 1.6; }
+.card-split .choice        { padding: 13px 18px; font-size: 15px; line-height: 1.45; }
+.card-split .end-summary   { font-size: clamp(15px, 1.4vw, 17px); line-height: 1.7; margin-bottom: 18px; }
+.card-split .stat-row      { margin-bottom: 14px; }
+.card-split .stat-cell     { padding: 12px; }
+.card-split .stat-val      { font-size: 20px; }
+.card-split .insight-block { padding: 16px 18px; margin-bottom: 16px; }
+.card-split .insight-text  { font-size: 13px; line-height: 1.6; }
+.card-split .end-headline  { font-size: clamp(22px, 4vw, 38px); margin-bottom: 4px; }
+
+/* ── PAGE TRANSITIONS ── */
+.page.enter .card {
+  animation: pageIn 0.55s var(--ease-out) both;
+  will-change: transform, opacity;
+}
+.page.exit .card {
+  animation: pageOut 0.28s ease-in both;
+  will-change: transform, opacity;
+}
+@keyframes pageIn  { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:translateY(0); } }
+@keyframes pageOut { from { opacity:1; transform:translateY(0);    } to { opacity:0; transform:translateY(-12px); } }
+
+/* ── STAGGER ── */
+.stagger > * { opacity:0; animation: rise 0.48s var(--ease-out) both; will-change:transform,opacity; }
+.stagger > *:nth-child(1) { animation-delay:0.04s; }
+.stagger > *:nth-child(2) { animation-delay:0.11s; }
+.stagger > *:nth-child(3) { animation-delay:0.18s; }
+.stagger > *:nth-child(4) { animation-delay:0.25s; }
+.stagger > *:nth-child(5) { animation-delay:0.32s; }
+.stagger > *:nth-child(6) { animation-delay:0.39s; }
+.stagger > *:nth-child(7) { animation-delay:0.45s; }
+.stagger > *:nth-child(8) { animation-delay:0.50s; }
+@keyframes rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+
+/* ── TYPOGRAPHY ── */
+.eyebrow {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:10px; font-weight:300;
+  letter-spacing:5px; text-transform:uppercase;
+  color:var(--gold); margin-bottom:16px;
+}
+.headline {
+  font-size:clamp(30px,7vw,52px);
+  font-weight:300; line-height:1.08;
+  color:var(--paper); margin-bottom:8px;
+  letter-spacing:-0.3px;
+}
+.headline em { font-style:italic; color:rgba(237,224,203,0.5); }
+.subline {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:10px; font-weight:200;
+  letter-spacing:3px; text-transform:uppercase;
+  color:rgba(237,224,203,0.68);
+  text-shadow: 0 1px 14px rgba(15,13,11,0.9), 0 0 2px rgba(15,13,11,0.6);
+  margin-bottom:30px;
+}
+.rule { width:36px; height:1px; background:var(--gold-dim); margin-bottom:26px; box-shadow: 0 0 8px rgba(15,13,11,0.6); }
+
+.body-text {
+  font-size:19px; font-weight:300;
+  line-height:1.78; color:rgba(237,224,203,0.82);
+  margin-bottom:26px;
+}
+.body-text em     { font-style:italic; color:var(--paper); }
+.body-text strong { font-weight:600; color:var(--gold); }
+
+.fact-strip {
+  border:1px solid var(--border);
+  border-left:2px solid var(--gold-dim);
+  padding:14px 18px; margin-bottom:26px;
+  background: rgba(15,13,11,0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-family:'Josefin Sans', sans-serif;
+  font-size:11px; font-weight:200;
+  letter-spacing:0.4px; line-height:1.7;
+  color:rgba(237,224,203,0.72);
+}
+.fact-strip em     { font-style:italic; color:rgba(237,224,203,0.95); }
+.fact-strip strong { color:rgba(200,146,58,0.9); font-weight:300; }
+
+/* ── STATUS ROW ── */
+.status-row {
+  display:flex; border:1px solid var(--border);
+  margin-bottom:26px; overflow:hidden;
+  background: rgba(15,13,11,0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.status-cell { flex:1; padding:10px 14px; border-right:1px solid var(--border); position:relative; }
+.status-cell:last-child { border-right:none; }
+.s-label {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:8px; font-weight:300;
+  letter-spacing:3px; text-transform:uppercase;
+  color:var(--muted); margin-bottom:4px;
+}
+.s-val {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:15px; font-weight:300; color:var(--paper);
+  transition: color 0.4s ease;
+}
+.s-val.danger { color:var(--danger); }
+.s-val.warn   { color:var(--gold);   }
+.s-val.good   { color:var(--safe);   }
+
+/* money drop flash */
+.s-val.flash-drop {
+  animation: moneyDrop 0.6s ease-out;
+}
+@keyframes moneyDrop {
+  0%   { color: #ff6b5a; transform: scale(1.12); }
+  60%  { transform: scale(1); }
+  100% { color: var(--danger); }
+}
+
+/* ── CLOCK CELL — ticking hours ── */
+.clock-tick {
+  font-variant-numeric: tabular-nums;
+}
+/* ticks count up visually */
+.tick-anim { animation: countUp 0.35s var(--ease-out) both; }
+@keyframes countUp {
+  from { opacity:0; transform: translateY(6px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+
+/* ── OUTCOME CARD ── */
+.outcome-card {
+  padding:18px 20px; margin-bottom:22px;
+  border:1px solid var(--border); position:relative;
+  background: rgba(15,13,11,0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.outcome-card::before {
+  content:''; position:absolute;
+  left:0; top:0; bottom:0; width:2px;
+}
+.outcome-card.bad     { border-color:rgba(176,58,46,0.3); }
+.outcome-card.bad::before    { background:var(--danger); }
+.outcome-card.good    { border-color:rgba(74,124,89,0.25); }
+.outcome-card.good::before   { background:var(--safe); }
+.outcome-card.neutral::before { background:var(--gold-dim); }
+.outcome-card.warn    { border-color:rgba(200,146,58,0.25); }
+.outcome-card.warn::before   { background:var(--gold-dim); }
+
+/* bad outcome card shakes in */
+.outcome-card.bad { animation: cardShake 0.5s var(--ease-out) 0.2s both; }
+@keyframes cardShake {
+  0%   { transform: translateX(-6px); opacity:0; }
+  30%  { transform: translateX(4px);  opacity:1; }
+  60%  { transform: translateX(-2px); }
+  100% { transform: translateX(0);    }
+}
+
+.outcome-label {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:8px; font-weight:300;
+  letter-spacing:3px; text-transform:uppercase;
+  margin-bottom:9px;
+}
+.outcome-label.bad     { color:var(--danger); }
+.outcome-label.good    { color:var(--safe);   }
+.outcome-label.neutral { color:var(--gold);   }
+.outcome-label.warn    { color:var(--gold);   }
+.outcome-text {
+  font-size:16px; font-weight:300;
+  line-height:1.7; color:rgba(237,224,203,0.78);
+}
+.outcome-text em { font-style:italic; color:var(--paper); }
+.outcome-text strong { font-weight:600; color:var(--gold); }
+
+/* ── CHOICES ── */
+.choices {
+  display:flex; flex-direction:column;
+  gap:1px; background:var(--border);
+  border:1px solid var(--border);
+}
+
+.choice {
+  background: rgba(15,13,11,0.75);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border:none;
+  padding:18px 20px; text-align:left; cursor:pointer;
+  color:var(--paper);
+  font-family:'Cormorant Garamond', serif;
+  font-size:17px; font-weight:300; line-height:1.5;
+  transition: background 0.2s ease, padding-left 0.26s var(--ease);
+  display:flex; align-items:flex-start; gap:14px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* normal hover */
+.choice:hover {
+  background: rgba(200,146,58,0.09);
+  padding-left:26px;
+}
+.choice:active { background:rgba(200,146,58,0.16); }
+
+/* ── RISK choice — tremor on hover ── */
+.choice.is-risk:hover {
+  background: rgba(176,58,46,0.1);
+  animation: choiceTremor 0.4s ease-in-out;
+  padding-left: 26px;
+}
+@keyframes choiceTremor {
+  0%   { transform: translateX(0); }
+  20%  { transform: translateX(-3px); }
+  40%  { transform: translateX(3px); }
+  60%  { transform: translateX(-2px); }
+  80%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
+}
+
+/* bribe choice — red tint hover */
+.choice.is-bribe:hover {
+  background: rgba(176,58,46,0.12);
+  animation: choiceTremor 0.35s ease-in-out;
+  padding-left: 26px;
+}
+
+/* ── choice letter ── */
+.choice-letter {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:10px; font-weight:200; letter-spacing:2px;
+  color:var(--gold); min-width:18px; padding-top:3px;
+  transition: transform 0.22s var(--ease);
+}
+.choice:hover .choice-letter { transform:translateX(3px); }
+.choice.is-risk .choice-letter  { color: var(--danger); opacity:0.7; }
+.choice.is-bribe .choice-letter { color: var(--danger); opacity:0.7; }
+
+.choice-body { flex:1; }
+
+.choice-tags { display:flex; gap:6px; margin-top:5px; flex-wrap:wrap; }
+.tag {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:8px; font-weight:300;
+  letter-spacing:2px; text-transform:uppercase;
+  padding:2px 7px; border:1px solid;
+}
+.tag-cost   { color:var(--gold);   border-color:var(--gold-dim); }
+.tag-bribe  { color:var(--danger); border-color:rgba(176,58,46,0.4); }
+.tag-risk   { color:var(--danger); border-color:rgba(176,58,46,0.3); }
+.tag-locked { color:var(--muted);  border-color:rgba(122,106,86,0.3); opacity:0.45; }
+
+.choice.locked { opacity:0.28; pointer-events:none; }
+
+/* ── PROGRESS ── */
+.progress {
+  display:flex; gap:7px; margin-bottom:26px; align-items:center;
+}
+.dot {
+  width:5px; height:5px; border-radius:50%;
+  background:rgba(122,106,86,0.25);
+  transition: all 0.45s var(--ease);
+}
+.dot.done   { background:var(--muted); }
+.dot.active {
+  background:var(--gold);
+  box-shadow:0 0 8px rgba(200,146,58,0.6);
+  transform:scale(1.4);
+  animation: dotPulse 2s ease-in-out infinite;
+}
+@keyframes dotPulse {
+  0%,100% { box-shadow: 0 0 6px rgba(200,146,58,0.5); }
+  50%     { box-shadow: 0 0 14px rgba(200,146,58,0.9); }
+}
+
+/* ── TITLE ── */
+.title-headline {
+  font-size:clamp(64px,16vw,110px);
+  font-weight:300; line-height:1; letter-spacing:-2px;
+  color:var(--paper); margin-bottom:4px;
+}
+.intro-text {
+  font-size:18px; font-weight:300;
+  line-height:1.82; color:rgba(237,224,203,0.6);
+  margin-bottom:44px; max-width:400px;
+}
+.intro-text em     { color:var(--paper); font-style:italic; }
+.intro-text strong { color:var(--gold); font-style:normal; font-weight:400; }
+
+/* ── CTA ── */
+.cta {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:10px; font-weight:300;
+  letter-spacing:4px; text-transform:uppercase;
+  background: rgba(15,13,11,0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border:1px solid rgba(200,146,58,0.45);
+  color:var(--paper); padding:15px 34px;
+  cursor:pointer;
+  transition: background 0.26s ease, border-color 0.26s ease, letter-spacing 0.26s var(--ease);
+  display:inline-block;
+}
+.cta:hover { background:rgba(200,146,58,0.12); border-color:var(--gold); letter-spacing:5px; }
+
+/* ── END ── */
+.end-headline {
+  font-size:clamp(26px,6vw,46px);
+  font-weight:300; line-height:1.1; margin-bottom:8px;
+}
+.end-headline.lost     { color:var(--danger); }
+.end-headline.survived { color:var(--paper);  }
+.end-headline.thrived  { color:var(--safe);   }
+
+.end-summary {
+  font-size:17px; font-weight:300;
+  line-height:1.8; color:rgba(237,224,203,0.62);
+  margin-bottom:30px;
+}
+.end-summary strong { color:var(--paper); font-weight:400; }
+
+.stat-row {
+  display:flex; border:1px solid var(--border); margin-bottom:30px;
+  background: rgba(15,13,11,0.6);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.stat-cell { flex:1; padding:18px; text-align:center; border-right:1px solid var(--border); }
+.stat-cell:last-child { border-right:none; }
+.stat-val {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:24px; font-weight:200; color:var(--paper); margin-bottom:4px;
+}
+.stat-lbl {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:8px; font-weight:300;
+  letter-spacing:3px; text-transform:uppercase; color:var(--muted);
+}
+
+.insight-block {
+  border:1px solid rgba(58,90,124,0.28);
+  padding:22px; margin-bottom:30px;
+  background: rgba(15,13,11,0.6);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.insight-label {
+  font-family:'Josefin Sans', sans-serif;
+  font-size:8px; font-weight:300;
+  letter-spacing:4px; text-transform:uppercase;
+  color:rgba(100,150,200,0.65); margin-bottom:12px;
+}
+.insight-text {
+  font-size:15px; font-weight:300;
+  line-height:1.8; color:rgba(237,224,203,0.52);
+}
+.insight-text strong { color:rgba(237,224,203,0.78); font-weight:400; }
+
+@media (max-width:480px) {
+  .stat-row { flex-direction:column; }
+  .stat-cell { border-right:none; border-bottom:1px solid var(--border); }
+  .stat-cell:last-child { border-bottom:none; }
+  .status-cell { min-width:50%; }
+}
+</style>
+</head>
+<body>
+
+<div id="flash"></div>
+<div id="bg-a"></div>
+<div id="bg-b"></div>
+<div id="vignette"></div>
+<div class="ambient"></div>
+
+<div id="stage">
+  <div class="page visible enter" id="page-title">
+    <div class="card stagger">
+      <div class="eyebrow">An Interactive Simulation</div>
+      <h1 class="title-headline">Beitbridge</h1>
+      <div class="subline" style="margin-bottom:32px">A Border Trader's Story</div>
+      <div class="rule"></div>
+      <p class="intro-text">
+        You are <em>Amara.</em><br>
+        Half of the <strong>$480</strong> in your jacket lining is Mai Chido's — lent against her stokvel, owed back Friday. A third is the truck note. The rest is yours.<br>
+        The tomatoes are from your field. You picked them Sunday with your sister Tariro.<br>
+        You have never heard of the <strong>AfCFTA.</strong><br>
+        You believe what you carry is enough.
+      </p>
+      <button class="cta" onclick="goTo('dawn')">Begin the Journey</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ─── STATE ─── */
+const S = { money:480, hours:0, lost:0 };
+
+/* ─── IMAGES ─── */
+const IMAGES = {
+  'page-title':   'img/letter_envelope.jpg',
+  dawn:           'img/stencilled_crates.jpg',
+  queue:          'img/queue.jpg',
+  broker_intro:   'img/broker_intro.jpg',
+  broker_paid:    'img/broker_paid.jpg',
+  broker_partial: 'img/broker_paid.jpg',
+  broker_d2:      'img/broker_intro.jpg',
+  sars:           'img/sars.jpg',
+  cert_impossible:'img/cert_impossible.jpg',
+  harare:         'img/madziva_list.jpg',
+  proper_cross:   'img/proper_cross.jpg',
+  bribe:          'img/holding_room.jpg',
+  river:          'img/river.jpg',
+  lie:            'img/lie.jpg',
+  undervalue:     'img/lie.jpg',
+  storage_no:     'img/storage_no.jpg',
+  musina_late:    'img/musina_late.jpg',
+  end_thrived:    'img/end_screens.jpg',
+  end_survived:   'img/kitchen_survived.jpg',
+  end_lost:       'img/letter_lost.jpg',
+};
+
+/* ─── BG CROSSFADE ─── */
+let bgActive = 'a', bgCurrentSrc = '';
+function setBackground(id) {
+  const src = IMAGES[id] || '';
+  if (!src || src === bgCurrentSrc) return;
+  bgCurrentSrc = src;
+  const next = bgActive === 'a' ? 'b' : 'a';
+  const inEl = document.getElementById('bg-' + next);
+  const outEl = document.getElementById('bg-' + bgActive);
+  const img = new Image();
+  img.onload = () => {
+    inEl.style.backgroundImage = `url('${src}')`;
+    requestAnimationFrame(() => {
+      inEl.style.opacity = '1';
+      outEl.style.opacity = '0';
+      bgActive = next;
+    });
+  };
+  img.onerror = () => { outEl.style.opacity = '0'; };
+  img.src = src;
+}
+
+/* ─── TENSION HELPERS ─── */
+function triggerFlash() {
+  const el = document.getElementById('flash');
+  el.classList.remove('fire');
+  void el.offsetWidth; /* reflow to restart */
+  el.classList.add('fire');
+}
+
+function updateVignette() {
+  const v = document.getElementById('vignette');
+  if (S.money < 150) {
+    v.classList.add('danger');
+  } else {
+    v.classList.remove('danger');
+  }
+}
+
+function animateMoneyDrop(el) {
+  el.classList.remove('flash-drop');
+  void el.offsetWidth;
+  el.classList.add('flash-drop');
+}
+
+/* ─── CLOCK TICKER — counts up from prev value ─── */
+let clockTimer = null;
+function tickClock(el, from, to) {
+  if (clockTimer) clearInterval(clockTimer);
+  if (from === to) { el.textContent = to + 'h'; return; }
+  let cur = from;
+  const step = to > from ? 1 : -1;
+  clockTimer = setInterval(() => {
+    cur += step;
+    el.classList.remove('tick-anim');
+    void el.offsetWidth;
+    el.classList.add('tick-anim');
+    el.textContent = cur + 'h';
+    if (cur === to) clearInterval(clockTimer);
+  }, 90);
+}
+
+/* ─── SCENES ─── */
+const SCENES = {
+
+  dawn: {
+    dot:0, bad:false,
+    eyebrow:'Monday — 4:30 AM',
+    headline:'Before the border wakes',
+    subline:'Beitbridge, Zimbabwe',
+    body:`Two tonnes of tomatoes behind you, packed in crates Tariro stencilled by hand. Diesel from the next truck. Your cousin Tendai called twice last week — <em>the price in Musina is double Harare's, come now while it lasts.</em> Your jacket holds an ID, a receipt, and Pastor Mavhima's letter. The letter feels heavier than it is. You have not slept since Saturday.`,
+    fact:`First-time traders cross without knowing which documents exist — not because they are unprepared, but because no system has ever told them.`,
+    choices:[
+      { id:'A', text:'Join the main queue at the official border post.', to:'queue' },
+      { id:'B', text:'Speak to the brokers near the fuel station first.', to:'broker_intro' },
+      { id:'C', text:'Take the informal river crossing. You have heard it is faster.', to:'river', tag:'risk', tagType:'risk', cls:'is-risk' },
+    ]
+  },
+
+  queue: {
+    dot:1, bad:false,
+    eyebrow:'7:20 AM — Three hours in the queue',
+    headline:'A word you do not know',
+    subline:'The customs window, Beitbridge',
+    outcome:{ type:'neutral', label:'AT THE WINDOW',
+      text:`The officer takes the envelope without looking at you. He puts the receipt down. The ID. Pastor Mavhima's letter. He says one word. <em>"Phytosanitary."</em> You wait for him to explain. He has already turned to the next window. The man behind you — the one who watched — leans in and says it again, gently. <em>"Tomatoes are regulated. You needed a certificate from Harare. Three weeks ago."</em>`
+    },
+    body:`Harare is four hours behind you. The Plant Quarantine office closes at 4 PM. It is already past seven and the sun has not finished arriving.`,
+    fact:`The man behind you is named Joseph. He crosses every fortnight. <em>"They never told you about phytosanitary. They never told my mother either. UNCTAD writes papers about it. We just stand in the line."</em>`,
+    choices:[
+      { id:'A', text:'Ask if the certificate can be obtained here, today.', to:'cert_impossible' },
+      { id:'B', text:'Go back and find the brokers at the fuel station.', to:'broker_intro' },
+      { id:'C', text:'Offer the officer $30 to overlook the missing document.', to:'bribe', tag:'$30 — bribe risk', tagType:'bribe', cost:30, cls:'is-bribe' },
+    ]
+  },
+
+  broker_intro: {
+    dot:1, bad:false,
+    eyebrow:'The Fuel Station',
+    headline:'Obert has been here longer than the road',
+    subline:'An informal knowledge economy',
+    outcome:{ type:'neutral', label:'WHAT HE KNOWS',
+      text:`He reads your truck before you speak. <em>"Agricultural? Tomatoes?"</em> He lists, from memory, the five documents you need. Phytosanitary, ZIMRA export, Comesa CD, temporary import permit, customs declaration. You have one of them. He sees Tariro's stencilling on the crates and softens for half a second. <em>"My sister also paints crates."</em>`
+    },
+    body:`<em>"For everything, $120. Half now, half when you cross."</em> A quarter of what is in your jacket. Mai Chido does not know about Obert. Pastor Mavhima would not approve of Obert. Obert is what exists between the law and the harvest.`,
+    fact:`Obert: <em>"The paperwork costs more than the tariff. UNCTAD says so. I do not need UNCTAD to say so. I have been here twenty-two years. If anything goes wrong on the other side, you do not know me. That is also part of the price."</em>`,
+    choices:[
+      { id:'A', text:'Pay Obert $120 for full facilitation.', to:'broker_paid', tag:'$120', tagType:'cost', cost:120 },
+      { id:'B', text:'Negotiate. Offer $60 for partial help.', to:'broker_partial', tag:'$60', tagType:'cost', cost:60 },
+      { id:'C', text:'Decline. Try the official queue with what you have.', to:'queue' },
+    ]
+  },
+
+  broker_paid: {
+    dot:2, bad:false,
+    eyebrow:'Zimbabwe Side — 11:40 AM',
+    headline:'You are through the first gate',
+    subline:'The crossing is not finished',
+    outcome:{ type:'good', label:'ZIMBABWE CLEARED',
+      text:`Obert moves quickly now. Forms appear from a drawer in his car. You do not ask how. The officer stamps and waves you through without speaking. Obert nods toward the South African side. <em>"That officer is new. Be polite. Do not improvise."</em>`
+    },
+    body:`On the South African side, a different officer. A different problem. Your permit covers personal goods. Not commercial. <em>"For two tonnes of tomatoes you need a customs declaration."</em> He says it the way someone reads a weather report.`,
+    choices:[
+      { id:'A', text:'Ask calmly what the commercial declaration process is.', to:'sars' },
+      { id:'B', text:'Tell the officer the goods are a personal gift for your cousin.', to:'lie', tag:'risk', tagType:'risk', cls:'is-risk' },
+    ]
+  },
+
+  sars: {
+    dot:3, bad:false,
+    eyebrow:'SARS Office — 1:20 PM',
+    headline:'The form is twelve pages',
+    subline:'South African Revenue Service',
+    body:`The official explains the SAD500. The Harmonized System codes — <em>0702.00 for fresh tomatoes, learn that.</em> And almost in passing: a <strong>SADC Certificate of Origin.</strong> With it, 5%. Without it, 25%. On your load, $56 you did not bring. She is the third person today to mention a document you have never heard of.`,
+    fact:`The official, gently, like a teacher: <em>"ZIMRA issues the certificate. Three to five working days. It must be done before you cross. It is part of the AfCFTA — your country signed in 2018. It exists. It existed for your harvest. You did not know."</em>`,
+    choices:[
+      { id:'A', text:'Pay the full 25% duty now and sell today.', to:'musina_late', tag:'$70', tagType:'cost', cost:70 },
+      { id:'B', text:'Ask about storing goods here while you get the certificate.', to:'storage_no' },
+      { id:'C', text:'Declare a lower value to reduce the duty.', to:'undervalue', tag:'risk', tagType:'risk', cls:'is-risk' },
+    ]
+  },
+
+  cert_impossible: {
+    dot:2, bad:true,
+    eyebrow:'The Answer',
+    headline:'No. Not here.',
+    subline:'The gap between capacity and capability',
+    outcome:{ type:'bad', label:'CONFIRMED',
+      text:`<em>"The certificate needs an inspection. We do not inspect here. The closest office is Harare."</em> He says it without unkindness — only the slight weariness of a man who has said it many times this morning. He turns to the next window. Joseph, behind you, exhales.`
+    },
+    body:`You are learning, at this window, what you needed to know before Tariro stencilled the crates. Before the harvest. Before Mai Chido counted the bills into your hand.`,
+    choices:[
+      { id:'A', text:'Go back to find the brokers at the fuel station.', to:'broker_intro' },
+      { id:'B', text:'Drive back to Harare and do this properly.', to:'harare' },
+    ]
+  },
+
+  harare: {
+    dot:2, bad:false,
+    eyebrow:'Tuesday — Harare',
+    headline:'The list that should exist at every border',
+    subline:'Plant Quarantine Services Office',
+    outcome:{ type:'neutral', label:'WHAT YOU LEARN',
+      text:`Mr. Madziva, the inspector, writes the list slowly on government notepaper. Phytosanitary. ZIMRA export. Comesa CD form. Temporary import permit. Customs declaration. Five documents. He hands it to you and says, <em>"Photograph this. Tell the women in your village. The next time someone in your district loads a truck, do not let them go without it."</em> He is the first official who has explained anything.`
+    },
+    body:`You return to Beitbridge on Wednesday at dawn. The tomatoes survived on ice begged from the bottle store and a freezer at your aunt's. Twenty crates softened anyway. You folded Mr. Madziva's list into Pastor Mavhima's letter. They live in the same envelope now.`,
+    choices:[
+      { id:'A', text:'Cross on Wednesday with full documentation.', to:'proper_cross', cost:35, tag:'$35 cert fee', tagType:'cost' },
+    ]
+  },
+
+  proper_cross: {
+    dot:4, bad:false,
+    eyebrow:'Wednesday — 7:00 AM',
+    headline:'The crossing with papers',
+    subline:'Three hours. Two minor corrections. No drama.',
+    outcome:{ type:'good', label:'CLEARED — BOTH SIDES',
+      text:`The SARS official — different woman, same calm — opens the e-Tariff book. <em>"Fresh produce, Comesa protocol, five percent."</em> Your duty: $14. Not $70. The difference was sitting in a database the entire time. She stamps. She nods. The truck moves.`
+    },
+    body:`Musina by 11 AM. The crates open. The buyers come. By 2 PM only the empty boxes remain and a small, shocking pile of cash on Tendai's kitchen table.`,
+    choices:[
+      { id:'A', text:'Count the final total.', to:'end_thrived' },
+    ]
+  },
+
+  broker_partial: {
+    dot:2, bad:false,
+    eyebrow:'Half a Deal',
+    headline:'Half the documents, twice the friction',
+    subline:'South African commercial vehicle hold — 2:00 PM',
+    outcome:{ type:'neutral', label:'PARTIAL CLEARANCE',
+      text:`You clear Zimbabwe. Obert's $60 of help ends at the bridge. On the South African side, two documents missing. Three hours in a holding lane. The plastic chair leaves a print on the back of your legs. A supervisor sighs, prints a temporary goods permit. <em>"Forty dollars. Cash."</em>`
+    },
+    body:`Five o'clock. You are across. The tomatoes have been on this truck thirteen hours in 34-degree sun. You can smell the difference between this morning and now.`,
+    choices:[
+      { id:'A', text:'Continue. Pay the permit and proceed to SARS.', to:'musina_late', cost:40, tag:'$40 permit', tagType:'cost' },
+    ]
+  },
+
+  bribe: {
+    dot:2, bad:true,
+    eyebrow:'The Risk You Took',
+    headline:'He does not take it',
+    subline:'The officer calls a colleague',
+    outcome:{ type:'bad', label:'INCIDENT',
+      text:`Four hours in a holding room with a fluorescent light that does not stop humming. Your documents photographed. A formal warning, written in pen, signed. The $30 returned in the same notes you offered. You may not cross today. They keep the warning on file.`
+    },
+    body:`You drive back into Beitbridge with your tomatoes whole and your day gone. You park at the fuel station. You do not get out. You think of Mai Chido and the stokvel and Friday. You think of Tariro stencilling the crates. You think of Pastor Mavhima's letter, which says you are honest. The light goes orange and then grey before you move.`,
+    fact:`The officer faces no consequence. Nothing in his salary changes whether he takes a bribe or refuses one. The risk you took was borne entirely by you. This is structural.`,
+    choices:[
+      { id:'A', text:'Find Obert. Try again tomorrow.', to:'broker_d2' },
+    ]
+  },
+
+  broker_d2: {
+    dot:2, bad:false,
+    eyebrow:'Tuesday — 5:30 AM',
+    headline:'Day two. The tomatoes are older.',
+    subline:'Obert is still there.',
+    body:`His price has not moved. He sees the formal warning in your jacket and does not comment. <em>"The first time happens to everyone. The second time only happens if you do not learn."</em> He explains each document as he processes it. You write what he says on the back of Pastor Mavhima's envelope. He is the only trade education system at this border, and he charges $120 for it.`,
+    choices:[
+      { id:'A', text:'Pay Obert and cross.', to:'broker_paid', cost:120, tag:'$120', tagType:'cost' },
+    ]
+  },
+
+  river: {
+    dot:2, bad:true,
+    eyebrow:'The Limpopo — Pre-dawn',
+    headline:'Three men in gumboots',
+    subline:'R200 and a wave through',
+    outcome:{ type:'bad', label:'TWO KILOMETRES IN',
+      text:`Headlights cut sideways across the track. A SANDF patrol. The officer is no older than your sister. He reads the situation in three seconds. No permit. No clearance. No transit documentation. Goods confiscated. Truck impounded. A printed notice to appear before a magistrate in Louis Trichardt, in seventeen days, at 09:00.`
+    },
+    body:`You call Tendai from the side of the road. The signal is poor. You explain twice. Your voice does not shake. You are surprised by this. He says, <em>"Stay where you are. I am coming."</em> You sit on the gravel with Pastor Mavhima's letter in your hand and read it twice, slowly, as if to remember who wrote it.`,
+    fact:`The young officer, returning your phone after photographing it: <em>"Forty percent of trade in this region moves through this river. The AFDB knows. We know. None of us are paid to fix it. We are paid to stop you."</em>`,
+    choices:[
+      { id:'A', text:'Understand what this cost.', to:'end_lost' },
+    ]
+  },
+
+  lie: {
+    dot:3, bad:true,
+    eyebrow:'The Declaration',
+    headline:'He has seen two tonnes before',
+    subline:'The officer is calm about it',
+    outcome:{ type:'bad', label:'PENALTY',
+      text:`<em>"How much personal use is two tonnes of tomatoes?"</em> He does not raise his voice. He photographs the crates one by one, including Tariro's stencil. Penalty for false declaration of commercial goods: <strong>$150.</strong> Goods released on payment. He files the form in a folder marked with what looks like a hundred similar files.`
+    },
+    body:`You pay at the window. The notes feel different leaving your hand than entering it. You drive to Musina at the wrong hour and sell to whoever is left, at whatever price they offer. Tendai stands beside you while you accept numbers you would have laughed at three days ago.`,
+    choices:[
+      { id:'A', text:'Count what remains.', to:'end_lost', cost:150 },
+    ]
+  },
+
+  undervalue: {
+    dot:4, bad:true,
+    eyebrow:'The SARS Database',
+    headline:'She had the Musina wholesale rate on her phone',
+    subline:'Real-time market pricing',
+    outcome:{ type:'bad', label:'AUDIT TRIGGERED',
+      text:`She turns the phone toward you. <em>"The Musina rate this morning, from the wholesale registry."</em> Your declared value is 40% below it. The system flags the file before she finishes typing. Underpayment audit. Difference plus 20%. <strong>$60 additional.</strong> Your name is now on a list. Next time, the inspection will be longer.`
+    },
+    body:`You pay. You drive into Musina with the windows down because you cannot bear the smell of your own tomatoes. You arrive after the buyers have gone home for lunch. You sell to whoever returns. Less than you planned, for every part of this.`,
+    choices:[
+      { id:'A', text:'Count what remains.', to:'end_survived', cost:60 },
+    ]
+  },
+
+  storage_no: {
+    dot:4, bad:false,
+    eyebrow:'The Answer',
+    headline:'Customs does not store perishables',
+    subline:'Private cold storage: 12km away',
+    body:`The official writes a number on a slip of paper. <em>"Maluleke Cold Logistics. Tell them Sandra sent you."</em> By the time you confirm space and drive twelve kilometres on a back road, it is 3:30. Cold storage: $35 per night, per truck. The receptionist gives you a discount because of Sandra and because you look like you have not eaten today.`,
+    choices:[
+      { id:'A', text:'Store overnight. Cross tomorrow with proper papers.', to:'proper_cross', cost:35, tag:'$35', tagType:'cost' },
+      { id:'B', text:'Pay full duty now. Sell today, whatever hour you arrive.', to:'musina_late', cost:70, tag:'$70', tagType:'cost' },
+    ]
+  },
+
+  musina_late: {
+    dot:5, bad:false,
+    eyebrow:'Musina Market — 4:30 PM',
+    headline:'The vendors who are still here',
+    subline:'Some tomatoes did not survive the heat',
+    outcome:{ type:'warn', label:'ARRIVAL',
+      text:`Twenty percent of the load is no longer firm. The buyers still on the floor smell delay the way you smell rain coming. They offer accordingly. Tendai opens one crate, closes it, and does not look at you. He says only, <em>"Sit. Eat first."</em>`
+    },
+    body:`By 6 PM the floor is empty. Tendai's kitchen table is small and uneven. The light is a single bulb. You count the money twice. You write the number on the inside cover of a notebook you bought at the petrol station to remember everything you did not know this morning.`,
+    fact:`Tendai: <em>"Fifteen to thirty percent every time. UNECA says so. Cold storage at the border costs more per night than the tomatoes are worth at this hour. You learn the math fast."</em>`,
+    choices:[
+      { id:'A', text:'Count the final total.', to:'end_survived' },
+    ]
+  },
+
+};
+
+/* ─── ENDS ─── */
+const ENDS = {
+
+  end_thrived: {
+    type:'thrived',
+    headline:'The arithmetic, finally, in your favour.',
+    summary:`With full documentation and preferential tariffs, you sold by 2 PM. <strong>Duty: $14. Not $70.</strong> Tendai counts with you at the kitchen table. He says, <em>"Next month I have a friend with avocados."</em> You do not answer immediately. You are calculating what you owe Mai Chido, what is left for the truck note, what you will eat on Friday. The number, for the first time in three weeks, is not zero.`,
+    insight:`The <strong>SADC Certificate of Origin</strong>, the <strong>AfCFTA e-Tariff Book</strong>, the <strong>Guided Trade Initiative</strong> — these reduced your costs by eighty percent. Each one required knowing it existed in advance, before the harvest. You have written the five documents on the back of Pastor Mavhima's envelope. Tomorrow you will photograph it and send it to Tariro and to four women in your district. The system rewarded you. You found the entrance. Now you are the entrance for someone else.`
+  },
+
+  end_survived: {
+    type:'survived',
+    headline:'You arrived. The price of arriving was the lesson.',
+    summary:`You made it to Musina. After every cost, you have <strong>$MONEY</strong> left of the original $480. The system did not stop you. It charged you tuition for not knowing its rules — and the tuition was not on the syllabus. Mai Chido will be paid Friday. The truck note will not.`,
+    insight:`The <strong>AfCFTA Non-Tariff Barrier Online Mechanism</strong> allows traders to report delays exactly like the ones you faced. As of 2025 it had 1,911 registered users across 54 nations. The tools exist. They require knowing to look for them. You are now one of the 1,912. You write the link on the back of Pastor Mavhima's envelope. Next time, before the harvest, you will read it.`
+  },
+
+  end_lost: {
+    type:'lost',
+    headline:'You did not arrive.',
+    summary:`You have <strong>$MONEY</strong> left of $480. Not lost to tariffs. Lost to the cost of not knowing. Mai Chido will not be paid Friday. Pastor Mavhima's letter is still in your jacket. It says you are honest. It is, in the end, the most accurate document you carried.`,
+    insight:`Fewer than <strong>20% of African SMEs</strong> have ever attempted to export. This is not an ambition deficit. It is a knowledge-infrastructure deficit — one that exists in the hours before a truck is loaded, not at the border window. You believed what you carried was enough. You now know what you needed to carry. You will tell Tariro tonight. She will tell three women. Three women will tell nine. The infrastructure begins, today, with you.`
+  }
+
+};
+
+/* ─── NAVIGATION ─── */
+let currentId = 'page-title';
+let prevHours = 0;
+
+function goTo(sceneId, isBad) {
+  setBackground(sceneId);
+  if (isBad) triggerFlash();
+  updateVignette();
+
+  const cur = document.getElementById(currentId);
+  if (cur) {
+    cur.classList.add('exit');
+    cur.classList.remove('enter');
+    setTimeout(() => cur.classList.remove('visible','exit'), 300);
+  }
+  setTimeout(() => {
+    ENDS[sceneId] ? renderEnd(sceneId) : renderScene(sceneId);
+  }, 170);
+}
+
+function choose(to, cost, isBad) {
+  const prevMoney = S.money;
+  if (cost) { S.money = Math.max(0, S.money - cost); S.lost += cost; }
+  prevHours = S.hours;
+  S.hours += 3;
+  goTo(to, isBad);
+}
+
+/* ─── RENDER SCENE ─── */
+function renderScene(id) {
+  const sc = SCENES[id];
+  if (!sc) return;
+
+  const mClass = S.money < 100 ? 'danger' : S.money < 250 ? 'warn' : 'good';
+
+  let h = `<div class="card card-split">`;
+
+  /* ── narrative column ── */
+  h += `<div class="card-narrative stagger">`;
+
+  /* progress */
+  h += `<div class="progress">`;
+  for (let i=0;i<6;i++) {
+    const c = i < sc.dot ? 'done' : i === sc.dot ? 'active' : '';
+    h += `<div class="dot ${c}"></div>`;
+  }
+  h += `</div>`;
+
+  /* header */
+  h += `<div class="eyebrow">${sc.eyebrow}</div>`;
+  h += `<h2 class="headline">${sc.headline}</h2>`;
+  h += `<div class="subline">${sc.subline}</div>`;
+  h += `<div class="rule"></div>`;
+
+  /* body */
+  if (sc.body) h += `<p class="body-text">${sc.body}</p>`;
+
+  /* fact */
+  if (sc.fact) h += `<div class="fact-strip">${sc.fact}</div>`;
+
+  h += `</div>`;
+
+  /* ── action column ── */
+  h += `<div class="card-action stagger">`;
+
+  /* status */
+  h += `<div class="status-row">
+    <div class="status-cell">
+      <div class="s-label">Capital</div>
+      <div class="s-val ${mClass}" id="money-val">$${S.money}</div>
+    </div>
+    <div class="status-cell">
+      <div class="s-label">Hours elapsed</div>
+      <div class="s-val ${S.hours>10?'warn':''} clock-tick" id="clock-val">${prevHours}h</div>
+    </div>
+    <div class="status-cell">
+      <div class="s-label">Lost to system</div>
+      <div class="s-val ${S.lost>0?'warn':''}">$${S.lost||'—'}</div>
+    </div>
+  </div>`;
+
+  /* outcome */
+  if (sc.outcome) {
+    const o = sc.outcome;
+    h += `<div class="outcome-card ${o.type}">
+      <div class="outcome-label ${o.type}">${o.label}</div>
+      <div class="outcome-text">${o.text}</div>
+    </div>`;
+  }
+
+  /* choices */
+  if (sc.choices && sc.choices.length) {
+    h += `<div class="choices">`;
+    sc.choices.forEach(ch => {
+      const locked = ch.cost && ch.cost > S.money;
+      const choiceCls = ['choice', ch.cls||'', locked?'locked':''].filter(Boolean).join(' ');
+      const isBadChoice = (ch.cls === 'is-risk' || ch.cls === 'is-bribe');
+      let tags = '';
+      if (ch.tag) tags += `<span class="tag tag-${ch.tagType||'cost'}">${ch.tag}</span>`;
+      if (locked) tags += `<span class="tag tag-locked">cannot afford</span>`;
+      h += `<button class="${choiceCls}"
+        onclick="choose('${ch.to}',${ch.cost||0},${isBadChoice})">
+        <span class="choice-letter">${ch.id}</span>
+        <span class="choice-body">${ch.text}${tags?`<div class="choice-tags">${tags}</div>`:''}</span>
+      </button>`;
+    });
+    h += `</div>`;
+  }
+
+  h += `</div>`;
+  h += `</div>`;
+  mount('scene-'+id, h);
+
+  /* animate clock ticking up after mount */
+  requestAnimationFrame(() => {
+    const clockEl = document.getElementById('clock-val');
+    if (clockEl && prevHours !== S.hours) tickClock(clockEl, prevHours, S.hours);
+
+    /* flash money if it dropped */
+    if (S.lost > 0) {
+      const moneyEl = document.getElementById('money-val');
+      if (moneyEl && S.money < 480 - S.lost + 1) animateMoneyDrop(moneyEl);
+    }
+  });
+}
+
+/* ─── RENDER END ─── */
+function renderEnd(id) {
+  const e = ENDS[id];
+  const summary = e.summary.replace('$MONEY','$'+S.money);
+  if (e.type === 'lost') triggerFlash();
+
+  const subline = e.type === 'lost' ? 'The side of the road, after dark' : "Tendai's kitchen table, Musina";
+
+  let h = `<div class="card card-split">`;
+
+  /* ── narrative column ── */
+  h += `<div class="card-narrative stagger">`;
+  h += `<div class="eyebrow">Journey's End</div>`;
+  h += `<h2 class="end-headline ${e.type}">${e.headline}</h2>`;
+  h += `<div class="subline">${subline}</div>`;
+  h += `<div class="rule"></div>`;
+  h += `<p class="end-summary">${summary}</p>`;
+  h += `</div>`;
+
+  /* ── action column ── */
+  h += `<div class="card-action stagger">`;
+  h += `<div class="stat-row">
+    <div class="stat-cell"><div class="stat-val">$${S.money}</div><div class="stat-lbl">Remaining</div></div>
+    <div class="stat-cell"><div class="stat-val">$${480-S.money}</div><div class="stat-lbl">Lost to system</div></div>
+    <div class="stat-cell"><div class="stat-val">${S.hours}h</div><div class="stat-lbl">Total delay</div></div>
+  </div>`;
+  h += `<div class="insight-block">
+    <div class="insight-label">What Amara Did Not Know</div>
+    <div class="insight-text">${e.insight}<br><br>
+    The <strong>AfCFTA</strong> has been operational since 2021. Zimbabwe is a signatory. Across Africa's 635 urban border corridors, <strong>42 million people</strong> live and trade in the gap between capacity and capability.</div>
+  </div>`;
+  h += `<button class="cta" onclick="restart()">Try a Different Path</button>`;
+  h += `</div>`;
+
+  h += `</div>`;
+  mount('end-'+id, h);
+}
+
+/* ─── DOM ─── */
+function mount(pageId, html) {
+  document.querySelectorAll('.page:not(.visible)').forEach(p => { if (p.id !== 'page-title') p.remove(); });
+  let page = document.getElementById(pageId);
+  if (!page) {
+    page = document.createElement('div');
+    page.id = pageId;
+    page.className = 'page';
+    document.getElementById('stage').appendChild(page);
+  }
+  page.innerHTML = html;
+  page.classList.add('visible','enter');
+  currentId = pageId;
+  if (window.scrollY > 0) window.scrollTo(0, 0);
+}
+
+function restart() {
+  S.money=480; S.hours=0; S.lost=0; prevHours=0;
+  updateVignette();
+  setBackground('page-title');
+  const cur = document.getElementById(currentId);
+  if (cur) { cur.classList.add('exit'); cur.classList.remove('enter'); setTimeout(()=>cur.classList.remove('visible','exit'),300); }
+  setTimeout(() => {
+    document.querySelectorAll('.page').forEach(p => { if (p.id !== 'page-title') p.remove(); });
+    const t = document.getElementById('page-title');
+    t.classList.add('visible','enter');
+    currentId = 'page-title';
+    if (window.scrollY > 0) window.scrollTo(0, 0);
+  }, 360);
+}
+
+/* init */
+setBackground('page-title');
+</script>
+</body>
+</html>
